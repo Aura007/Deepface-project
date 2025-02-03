@@ -1,0 +1,209 @@
+# **Face Recognition and Emotion Detection System**
+
+## **Table of Contents**
+1. Introduction
+2. Libraries Used
+3. Project Setup and Directory Structure
+4. Functions Used
+5. Code Walkthrough
+6. Enhancements and Features
+7. Future Improvements
+
+---
+
+## **1. Introduction**
+This project is a **real-time face recognition and emotion detection system** that:
+- Captures and stores face images for dataset creation.
+- Trains a face recognition model using DeepFace.
+- Recognizes faces in real-time and displays details like name, age, gender, and emotion.
+- Dynamically updates emotions until a change is detected.
+- Uses cosine similarity for accurate face matching.
+- Provides real-time face count and audio feedback for recognized faces.
+
+This project is useful for security applications, attendance systems, and human-computer interaction.
+
+---
+
+## **2. Libraries Used**
+Below are the key libraries used in this project:
+
+| Library | Description |
+|---------|-------------|
+| os | Used for creating and managing directories. |
+| cv2 (OpenCV) | Used for capturing video, detecting faces, and drawing on images. |
+| numpy | Used for handling numerical operations and storing embeddings. |
+| deepface | Provides pre-trained models for face recognition and emotion detection. |
+
+---
+
+## **3. Project Setup and Directory Structure**
+Before running the code, ensure you have the necessary dependencies installed:
+```bash
+pip install opencv-python numpy deepface
+```
+
+The directory structure is as follows:
+```
+face_recognition_project/
+│-- face_dataset/
+│   ├── person_name/
+│   │   ├── person_1.jpg
+│   │   ├── person_2.jpg
+│-- embeddings.npy
+│-- face_recognition.py
+```
+
+---
+
+## **4. Functions Used**
+
+### **create_face_dataset(name)**
+- Captures 20 face images of a person using OpenCV.
+- Saves images in a directory named after the person.
+
+### **train_face_dataset()**
+- Extracts facial embeddings using DeepFace.
+- Saves embeddings for recognition.
+
+### **recognize_faces(embeddings)**
+- Captures live video, detects faces, and identifies the person.
+- Displays name, age, gender, and emotion.
+- Updates the displayed emotion until a new one is detected.
+
+---
+
+## **5. Code Walkthrough**
+### **Importing Required Libraries**
+```python
+import os
+import cv2
+import numpy as np
+from deepface import DeepFace
+```
+- `os`: Handles file directories.
+- `cv2`: Captures video and processes images.
+- `numpy`: Manages numerical operations.
+- `DeepFace`: Provides face recognition and analysis.
+
+### **Creating Dataset**
+```python
+def create_face_dataset(name):
+    person_dir = os.path.join("face_dataset", name)
+    os.makedirs(person_dir, exist_ok=True)
+    cap = cv2.VideoCapture(0)
+```
+- Creates a directory for the person if it does not exist.
+- Initializes webcam.
+
+```python
+    count = 0
+    while count < 20:
+        ret, frame = cap.read()
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+```
+- Reads frames from the camera.
+- Converts the image to grayscale for face detection.
+
+```python
+        faces = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml").detectMultiScale(gray, 1.3, 5)
+```
+- Uses OpenCV's pre-trained Haar cascade classifier to detect faces.
+
+```python
+        for (x, y, w, h) in faces:
+            count += 1
+            face_img = frame[y:y + h, x:x + w]
+            face_path = os.path.join(person_dir, f"{name}_{count}.jpg")
+            cv2.imwrite(face_path, face_img)
+```
+- Extracts the face from the frame and saves it to disk.
+
+```python
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+```
+- Allows the user to quit using the 'q' key.
+
+### **Training the Model**
+```python
+def train_face_dataset():
+    embeddings = {}
+    for person in os.listdir("face_dataset"):
+        person_dir = os.path.join("face_dataset", person)
+```
+- Iterates through each person's folder to process images.
+
+```python
+        embeddings[person] = []
+        for img_name in os.listdir(person_dir):
+            img_path = os.path.join(person_dir, img_name)
+            embedding = DeepFace.represent(img_path, model_name="Facenet", enforce_detection=False)[0]["embedding"]
+            embeddings[person].append(embedding)
+```
+- Extracts facial embeddings using DeepFace and stores them in a dictionary.
+
+### **Recognizing Faces in Real-Time**
+```python
+def recognize_faces(embeddings):
+    cap = cv2.VideoCapture(0)
+```
+- Starts video capture.
+
+```python
+        ret, frame = cap.read()
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml").detectMultiScale(gray, 1.3, 5)
+```
+- Detects faces in the live video stream.
+
+```python
+        for (x, y, w, h) in faces:
+            face_img = frame[y:y + h, x:x + w]
+            analysis = DeepFace.analyze(face_img, actions=["age", "gender", "emotion"], enforce_detection=False)
+```
+- Extracts the face from the frame and analyzes age, gender, and emotion.
+
+```python
+            prev_emotion = ""
+            while True:
+                new_analysis = DeepFace.analyze(face_img, actions=["emotion"], enforce_detection=False)
+                new_emotion = max(new_analysis["emotion"], key=new_analysis["emotion"].get)
+                if new_emotion != prev_emotion:
+                    prev_emotion = new_emotion
+                    break
+```
+- Continuously updates emotion display until a change is detected.
+
+```python
+            cv2.putText(frame, f"{match}, Age: {age}, Gender: {gender}, Emotion: {emotion}", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+```
+- Displays the recognized face details on the screen.
+
+### **Menu System**
+```python
+while True:
+    print("1. Create Face Dataset\n2. Train Face Dataset\n3. Recognize Faces\n4. Exit")
+    choice = input("Enter your choice: ")
+```
+- Provides a menu-driven system for user interaction.
+
+```python
+    if choice == "1":
+        create_face_dataset(input("Enter name: "))
+    elif choice == "2":
+        embeddings = train_face_dataset()
+        np.save("embeddings.npy", embeddings)
+    elif choice == "3":
+        embeddings = np.load("embeddings.npy", allow_pickle=True).item()
+        recognize_faces(embeddings)
+    elif choice == "4":
+        break
+```
+- Implements a loop until the user exits.
+
+---
+
+## **6. Future Improvements**
+- Integrate voice recognition.
+- Enhance accuracy with deep learning models.
+- Implement mobile application support.s
